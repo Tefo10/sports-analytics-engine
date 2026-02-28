@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Soccer AI - Pro Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-900 text-white p-6 font-sans">
+    <div class="max-w-6xl mx-auto">
+        <header class="mb-6 flex justify-between items-end">
+            <div>
+                <h1 class="text-3xl font-black text-green-500 tracking-tighter uppercase">Soccer Analytics Pro</h1>
+                <p class="text-gray-500 text-xs">Base de Datos Completa & Inferencia de Poisson</p>
+            </div>
+            <div id="pagination-controls" class="flex gap-2">
+                <button onclick="changePage(-1)" class="bg-gray-800 hover:bg-gray-700 px-3 py-1 rounded text-xs border border-gray-700">Anterior</button>
+                <span id="page-info" class="text-xs text-gray-400 self-center">Página 1</span>
+                <button onclick="changePage(1)" class="bg-gray-800 hover:bg-gray-700 px-3 py-1 rounded text-xs border border-gray-700">Siguiente</button>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-2 bg-gray-800 rounded-2xl border border-gray-700 overflow-hidden shadow-2xl">
+                <table class="w-full text-left">
+                    <thead class="bg-gray-900/50 text-gray-500 text-[10px] uppercase font-bold">
+                        <tr>
+                            <th class="p-4">Equipo</th>
+                            <th class="p-4 text-center">xG Favor</th>
+                            <th class="p-4 text-center">xG Contra</th>
+                            <th class="p-4">Recomendación</th>
+                        </tr>
+                    </thead>
+                    <tbody id="teamsTable" class="divide-y divide-gray-700">
+                        </tbody>
+                </table>
+            </div>
+
+            <div class="bg-gray-800 p-6 rounded-2xl border border-gray-700 shadow-2xl h-fit">
+                <h2 class="text-lg font-bold text-blue-400 mb-4 border-b border-gray-700 pb-2">Analizador</h2>
+                <form id="calcForm" class="space-y-4">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-gray-900 p-3 rounded-xl">
+                            <label class="text-[9px] text-blue-400 font-bold block mb-1">LOCAL (1º Clic)</label>
+                            <input type="text" id="h_n" readonly class="bg-transparent text-sm w-full outline-none font-bold" placeholder="...">
+                            <div class="text-[10px] text-gray-500 mt-1">Sugerido: <span id="s_l" class="text-green-500">-</span></div>
+                            <input type="hidden" id="h_x">
+                        </div>
+                        <div class="bg-gray-900 p-3 rounded-xl">
+                            <label class="text-[9px] text-red-400 font-bold block mb-1">VISITA (2º Clic)</label>
+                            <input type="text" id="a_n" readonly class="bg-transparent text-sm w-full outline-none font-bold" placeholder="...">
+                            <div class="text-[10px] text-gray-500 mt-1">Sugerido: <span id="s_v" class="text-red-500">-</span></div>
+                            <input type="hidden" id="a_x">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-2">
+                        <input type="number" id="o_l" step="0.01" class="bg-gray-900 p-2 rounded text-xs text-center border border-gray-700 text-green-400" placeholder="Cuota L">
+                        <input type="number" id="o_e" step="0.01" class="bg-gray-900 p-2 rounded text-xs text-center border border-gray-700 text-blue-400" placeholder="Cuota E">
+                        <input type="number" id="o_v" step="0.01" class="bg-gray-900 p-2 rounded text-xs text-center border border-gray-700 text-red-400" placeholder="Cuota V">
+                    </div>
+                    
+                    <button type="submit" class="w-full bg-green-600 hover:bg-green-500 py-3 rounded-xl font-bold transition text-xs">CALCULAR PROBABILIDADES</button>
+                </form>
+                <div id="chartArea" class="mt-6 hidden border-t border-gray-700 pt-6">
+                    <canvas id="resChart"></canvas>
+                    <div id="valLabel" class="mt-4 text-center font-bold p-3 rounded-lg text-sm"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allTeams = [];
+        let currentPage = 1;
+        const itemsPerPage = 10;
+        let nextSel = 'home';
+        let myChart;
+
+        async function fetchData() {
+            const r = await fetch('http://127.0.0.1:8000/teams');
+            allTeams = await r.json();
+            renderTable();
+        }
+
+        function renderTable() {
+            const start = (currentPage - 1) * itemsPerPage;
+            const end = start + itemsPerPage;
+            const pageData = allTeams.slice(start, end);
+
+            const html = pageData.map(t => `
+                <tr class="hover:bg-blue-500/10 cursor-pointer transition group" onclick="smartSelect('${t.name}', ${t.atk}, ${t.def}, ${t.sug_l}, ${t.sug_v})">
+                    <td class="p-4 font-bold text-gray-300 group-hover:text-blue-400">${t.name}</td>
+                    <td class="p-4 text-center text-green-400 font-mono font-bold">${t.atk}</td>
+                    <td class="p-4 text-center text-red-400 font-mono font-bold">${t.def}</td>
+                    <td class="p-4"><span class="text-[9px] bg-gray-700 px-2 py-1 rounded-full font-bold">${t.status}</span></td>
+                </tr>
+            `).join('');
+            
+            document.getElementById('teamsTable').innerHTML = html;
+            document.getElementById('page-info').innerText = `Página ${currentPage} de ${Math.ceil(allTeams.length / itemsPerPage)}`;
+        }
+
+        function changePage(dir) {
+            const max = Math.ceil(allTeams.length / itemsPerPage);
+            currentPage = Math.max(1, Math.min(max, currentPage + dir));
+            renderTable();
+        }
+
+        function smartSelect(name, xgAtk, xgDef, sugL, sugV) {
+            if(nextSel === 'home') {
+                document.getElementById('h_n').value = name;
+                document.getElementById('h_x').value = xgAtk;
+                document.getElementById('s_l').innerText = sugL;
+                nextSel = 'away';
+            } else {
+                document.getElementById('a_n').value = name;
+                document.getElementById('a_x').value = xgDef;
+                document.getElementById('s_v').innerText = sugV;
+                nextSel = 'home';
+            }
+        }
+
+        document.getElementById('calcForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const body = {
+                home_name: document.getElementById('h_n').value,
+                away_name: document.getElementById('a_n').value,
+                home_attack_power: parseFloat(document.getElementById('h_x').value),
+                away_defense_weakness: parseFloat(document.getElementById('a_x').value),
+                odds: {
+                    L: parseFloat(document.getElementById('o_l').value) || 1,
+                    E: parseFloat(document.getElementById('o_e').value) || 1,
+                    V: parseFloat(document.getElementById('o_v').value) || 1
+                }
+            };
+            const r = await fetch('http://127.0.0.1:8000/predict', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(body)
+            });
+            const res = await r.json();
+            
+            document.getElementById('chartArea').classList.remove('hidden');
+            if(myChart) myChart.destroy();
+            myChart = new Chart(document.getElementById('resChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Local', 'Empate', 'Visita'],
+                    datasets: [{
+                        data: [res.probabilities.L, res.probabilities.E, res.probabilities.V],
+                        backgroundColor: ['#22c55e', '#3b82f6', '#ef4444'],
+                        borderWidth: 0
+                    }]
+                }
+            });
+        });
+
+        fetchData();
+    </script>
+</body>
+</html>

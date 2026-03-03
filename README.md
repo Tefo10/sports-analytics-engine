@@ -58,8 +58,11 @@ uvicorn api:app --reload
 - `GET /health`
 - `GET /teams`
 - `GET /search?query=Madrid`
+- `GET /front/match-inputs?home_team=Real%20Madrid&away_team=Barcelona`
 - `POST /predict`
 - `GET /scanner`
+
+`GET /teams` ahora usa datos reales scrapeados desde FBRef (resultados jugados) y calcula metricas home/away.
 
 ### Ejemplo `POST /predict`
 ```json
@@ -69,6 +72,24 @@ uvicorn api:app --reload
   "home_attack_power": 2.1,
   "away_defense_weakness": 1.1,
   "odds": { "L": 2.1, "E": 3.3, "V": 3.8 }
+}
+```
+
+### Ejemplo `GET /front/match-inputs`
+```json
+{
+  "equipo_local": "Real Madrid",
+  "equipo_visitante": "Barcelona",
+  "partidos_jugados_local": 13,
+  "goles_a_favor_local": 31,
+  "goles_en_contra_local": 10,
+  "puntos_local": 33,
+  "empates_local": 3,
+  "partidos_jugados_visitante": 13,
+  "goles_a_favor_visitante": 23,
+  "goles_en_contra_visitante": 12,
+  "puntos_visitante": 25,
+  "empates_visitante": 4
 }
 ```
 

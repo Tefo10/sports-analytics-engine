@@ -1,18 +1,24 @@
 import sys
+from datetime import datetime
+from threading import Lock
 from typing import Dict
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from src.models.brain import BettingBrain
+from src.scraper.stealth_driver import FBRefScraper
 
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8")
 
 app = FastAPI(title="Sports Analytics Engine API")
 brain = BettingBrain()
+scraper = FBRefScraper()
+cache_lock = Lock()
+teams_cache = {"data": None, "fetched_at": None}
 
 app.add_middleware(
     CORSMiddleware,
@@ -36,48 +42,77 @@ class MatchRequest(BaseModel):
     odds: Odds
 
 
+def load_teams_data(force_refresh=False, max_age_seconds=180):
+    with cache_lock:
+        cached_data = teams_cache["data"]
+        cached_at = teams_cache["fetched_at"]
+        if not force_refresh and cached_data and cached_at:
+            age = (datetime.utcnow() - cached_at).total_seconds()
+            if age <= max_age_seconds:
+                return cached_data
+
+    try:
+        teams = scraper.get_la_liga_stats()
+    except Exception as exc:
+        with cache_lock:
+            if teams_cache["data"]:
+                return teams_cache["data"]
+        raise HTTPException(status_code=503, detail=f"Could not fetch live FBRef data: {exc}") from exc
+
+    with cache_lock:
+        teams_cache["data"] = teams
+        teams_cache["fetched_at"] = datetime.utcnow()
+    return teams
+
+
+def find_team_by_name(teams, team_name):
+    team_name_norm = team_name.strip().lower()
+
+    exact_match = next((team for team in teams if team["name"].lower() == team_name_norm), None)
+    if exact_match:
+        return exact_match
+
+    partial_match = next((team for team in teams if team_name_norm in team["name"].lower()), None)
+    return partial_match
+
+
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    with cache_lock:
+        cached_at = teams_cache["fetched_at"]
+    return {"status": "ok", "teams_last_refresh_utc": cached_at.isoformat() if cached_at else None}
 
 
 @app.get("/teams")
-def get_teams():
-    full_data = [
-        {"name": "Real Madrid", "atk": 2.15, "def": 0.88},
-        {"name": "Barcelona", "atk": 1.95, "def": 1.05},
-        {"name": "Girona", "atk": 1.85, "def": 1.20},
-        {"name": "Atletico Madrid", "atk": 1.70, "def": 0.95},
-        {"name": "Athletic Club", "atk": 1.60, "def": 1.10},
-        {"name": "Real Sociedad", "atk": 1.45, "def": 1.02},
-        {"name": "Betis", "atk": 1.30, "def": 1.15},
-        {"name": "Valencia", "atk": 1.25, "def": 1.10},
-        {"name": "Villarreal", "atk": 1.55, "def": 1.40},
-        {"name": "Getafe", "atk": 1.10, "def": 1.05},
-        {"name": "Osasuna", "atk": 1.15, "def": 1.20},
-        {"name": "Las Palmas", "atk": 1.05, "def": 1.18},
-        {"name": "Alaves", "atk": 1.08, "def": 1.25},
-        {"name": "Sevilla", "atk": 1.40, "def": 1.35},
-        {"name": "Mallorca", "atk": 0.95, "def": 1.10},
-        {"name": "Rayo Vallecano", "atk": 1.02, "def": 1.30},
-        {"name": "Celta de Vigo", "atk": 1.28, "def": 1.45},
-        {"name": "Cadiz", "atk": 0.85, "def": 1.40},
-        {"name": "Granada", "atk": 1.10, "def": 1.60},
-        {"name": "Almeria", "atk": 1.15, "def": 1.75},
-    ]
+def get_teams(refresh: bool = True, max_age_seconds: int = 180):
+    return load_teams_data(force_refresh=refresh, max_age_seconds=max_age_seconds)
 
-    for team in full_data:
-        team["sug_l"] = round(1 / (team["atk"] / (team["atk"] + team["def"] + 1)), 2)
-        team["sug_v"] = round(1 / (team["def"] / (team["atk"] + team["def"] + 1)), 2)
 
-        if team["atk"] > 1.8:
-            team["status"] = "DOMINANTE"
-        elif team["def"] > 1.4:
-            team["status"] = "DEFENSA DEBIL"
-        else:
-            team["status"] = "ESTABLE"
+@app.get("/front/match-inputs")
+def get_front_match_inputs(home_team: str, away_team: str, refresh: bool = True):
+    teams = load_teams_data(force_refresh=refresh, max_age_seconds=180)
 
-    return full_data
+    home = find_team_by_name(teams, home_team)
+    away = find_team_by_name(teams, away_team)
+    if not home:
+        raise HTTPException(status_code=404, detail=f"Local team not found: {home_team}")
+    if not away:
+        raise HTTPException(status_code=404, detail=f"Away team not found: {away_team}")
+
+    return {
+        "equipo_local": home["name"],
+        "equipo_visitante": away["name"],
+        "partidos_jugados_local": home["partidos_jugados_local"],
+        "goles_a_favor_local": home["goles_a_favor_local"],
+        "goles_en_contra_local": home["goles_en_contra_local"],
+        "puntos_local": home["puntos_local"],
+        "empates_local": home["empates_local"],
+        "partidos_jugados_visitante": away["partidos_jugados_visitante"],
+        "goles_a_favor_visitante": away["goles_a_favor_visitante"],
+        "goles_en_contra_visitante": away["goles_en_contra_visitante"],
+        "puntos_visitante": away["puntos_visitante"],
+        "empates_visitante": away["empates_visitante"],
+    }
 
 
 @app.post("/predict")
@@ -90,7 +125,7 @@ def predict(match: MatchRequest):
 
 @app.get("/scanner")
 def scan_opportunities():
-    teams = get_teams()
+    teams = load_teams_data(force_refresh=False, max_age_seconds=180)
     opportunities = []
 
     for i in range(0, len(teams), 2):
@@ -112,7 +147,7 @@ def scan_opportunities():
 
 @app.get("/search")
 def search_team(query: str):
-    teams = get_teams()
+    teams = load_teams_data(force_refresh=False, max_age_seconds=180)
     return [team for team in teams if query.lower() in team["name"].lower()]
 
 

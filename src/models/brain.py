@@ -13,3 +13,7 @@ class BettingBrain:
 
     def find_value(self, probs, odds):
         return {k: (probs[k] * odds[k]) - 1 for k in odds if (probs[k] * odds[k]) > 1.10}
+
+    def apply_absences(self, original_xg, absence_level):
+        reduction = {0: 1.0, 1: 0.85, 2: 0.70}
+        return original_xg * reduction.get(absence_level, 1.0)

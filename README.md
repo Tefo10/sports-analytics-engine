@@ -127,3 +127,8 @@ python -m unittest discover -s tests -v
 ![GET local/visita](docs/screenshots/get-local-visita.png)
 ![POST probabilidades](docs/screenshots/post-probabilidades.png)
 ![GET scanner](docs/screenshots/scanner.png)
+
+## Evidencia Bot Telegram
+![Bot Telegram 1](docs/screenshots/telegram-bot1.jpg)
+![Bot Telegram 2](docs/screenshots/telegram-bot2.jpg)
+![Bot Telegram 3](docs/screenshots/telegram-bot3.jpg)

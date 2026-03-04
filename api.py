@@ -118,7 +118,7 @@ def get_front_match_inputs(home_team: str, away_team: str, refresh: bool = True)
 @app.post("/predict")
 def predict(match: MatchRequest):
     probs = brain.predict_1x2(match.home_attack_power, match.away_defense_weakness)
-    odds: Dict[str, float] = match.odds.dict()
+    odds: Dict[str, float] = match.odds.model_dump()
     value = brain.find_value(probs, odds)
     return {"probabilities": probs, "value_found": value}
 

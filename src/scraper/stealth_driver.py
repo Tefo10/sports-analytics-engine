@@ -36,7 +36,12 @@ class FBRefScraper:
 
     def get_tables(self, url):
         html = self._get_page_html(url)
-        return [self._flatten_columns(table) for table in pd.read_html(io.StringIO(html))]
+        tables = pd.read_html(io.StringIO(html))
+        if not tables:
+            # FBRef often ships tables inside HTML comments to deter simple scrapers.
+            uncommented_html = re.sub(r"<!--|-->", "", html)
+            tables = pd.read_html(io.StringIO(uncommented_html))
+        return [self._flatten_columns(table) for table in tables]
 
     def get_table(self, url, table_index=0):
         tables = self.get_tables(url)

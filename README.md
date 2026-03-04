@@ -120,5 +120,10 @@ python -m unittest discover -s tests -v
 ```
 
 ## Evidencia
-![Swagger local](docs/screenshots/api-swagger-local.svg)
-![Endpoint teams local](docs/screenshots/api-teams-local.svg)
+![API levantada](docs/screenshots/api-levantada.png)
+![GET health](docs/screenshots/get-health.png)
+![GET teams](docs/screenshots/get-teams.png)
+![GET buscar equipo](docs/screenshots/get-buscar-equipo.png)
+![GET local/visita](docs/screenshots/get-local-visita.png)
+![POST probabilidades](docs/screenshots/post-probabilidades.png)
+![GET scanner](docs/screenshots/scanner.png)

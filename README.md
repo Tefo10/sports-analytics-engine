@@ -7,9 +7,9 @@ Proyecto de analitica deportiva consolidado en un solo codigo base (`sports-anal
 2. Web scraping de FBRef con limpieza de datos y exportacion a CSV.
 3. Bot de Telegram con flujo de consulta y registro en base de datos SQLite.
 
-## Entregables (actualizar links antes de enviar)
+## Entregables
 - Repositorio API/Bot: `https://github.com/Tefo10/sports-analytics-engine`
-- Repositorio Scraping (separado): `PENDIENTE_CREAR_LINK_GITHUB`
+- Repositorio Scraping (separado): `https://github.com/Tefo10/Web-Scraping.git`
 
 ## Tecnologias
 - Python 3.10+
